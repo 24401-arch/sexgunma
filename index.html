@@ -3,106 +3,84 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>간호사 스마트 업무 기록지</title>
+    <title>AI 스마트 간호 기록지</title>
     <style>
-        body { font-family: 'Malgun Gothic', sans-serif; background-color: #f0f4f8; margin: 0; padding: 20px; }
-        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h1, h2 { color: #2c3e50; text-align: center; }
-        input, textarea, button { width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
-        button { background-color: #3498db; color: white; border: none; cursor: pointer; font-weight: bold; }
-        button:hover { background-color: #2980b9; }
-        .record-card { border-left: 5px solid #3498db; background: #f9f9f9; padding: 15px; margin-top: 15px; border-radius: 5px; }
-        .action-btns { display: flex; gap: 10px; margin-top: 10px; }
-        .action-btns button { background-color: #2ecc71; }
-        .action-btns button:hover { background-color: #27ae60; }
-        #app-section { display: none; }
+        body { font-family: 'Malgun Gothic', sans-serif; background-color: #eef2f5; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        h1, h2 { color: #2c3e50; text-align: center; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; color: #34495e; }
+        input, textarea, button { width: 100%; padding: 12px; border: 1px solid #dcdde1; border-radius: 8px; box-sizing: border-box; font-size: 15px; }
+        textarea { resize: vertical; min-height: 100px; }
+        .btn-primary { background-color: #3498db; color: white; border: none; cursor: pointer; font-weight: bold; margin-top: 10px; transition: 0.3s; }
+        .btn-primary:hover { background-color: #2980b9; }
+        .btn-ai { background-color: #9b59b6; color: white; border: none; cursor: pointer; font-weight: bold; margin-top: 10px; transition: 0.3s; }
+        .btn-ai:hover { background-color: #8e44ad; }
+        .record-card { border-left: 5px solid #3498db; background: #f8f9fa; padding: 20px; margin-top: 20px; border-radius: 8px; position: relative; }
+        .record-header { display: flex; justify-content: space-between; font-weight: bold; color: #2c3e50; margin-bottom: 10px; }
+        .ai-result { margin-top: 15px; padding: 15px; background-color: #f3e5f5; border-radius: 8px; border-left: 5px solid #9b59b6; font-size: 14px; display: none; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>🩺 스마트 간호 기록지</h1>
+    <h1>🩺 AI 스마트 간호 기록지</h1>
 
-    <div id="auth-section">
-        <h2>로그인 / 회원가입</h2>
-        <input type="email" id="email" placeholder="이메일을 입력하세요">
-        <input type="password" id="password" placeholder="비밀번호를 입력하세요">
-        <button id="login-btn">로그인</button>
-        <button id="signup-btn" style="background-color: #95a5a6;">회원가입</button>
-    </div>
-
-    <div id="app-section">
-        <div style="text-align: right;">
-            <button id="logout-btn" style="width: auto; background-color: #e74c3c;">로그아웃</button>
+    <div>
+        <div class="input-group">
+            <label for="patient-name">환자명 / 호실</label>
+            <input type="text" id="patient-name" placeholder="예: 홍길동 (301호)">
         </div>
-
-        <h2>환자 상태 기록</h2>
-        <input type="text" id="patient-name" placeholder="환자명 (예: 홍길동)">
-        <input type="text" id="vitals" placeholder="Vitals (예: BP 120/80, PR 80, BT 36.5)">
-        <textarea id="nursing-notes" rows="4" placeholder="간호 기록 (증상 및 처치 내용을 입력하세요)"></textarea>
-        <button id="save-btn">기록 저장하기</button>
-
-        <h2>최근 기록</h2>
-        <div id="records-list"></div>
+        <div class="input-group">
+            <label for="vitals">활력징후 (Vitals)</label>
+            <input type="text" id="vitals" placeholder="예: BP 120/80, PR 80, RR 20, BT 36.5">
+        </div>
+        <div class="input-group">
+            <label for="nursing-notes">간호 기록 (상세)</label>
+            <textarea id="nursing-notes" placeholder="환자의 상태, 호소 내용, 처치 내역을 상세히 적어주세요."></textarea>
+        </div>
+        <button class="btn-primary" onclick="saveRecord()">기록 저장하기</button>
     </div>
+
+    <h2 style="margin-top: 40px;">최근 업무 기록</h2>
+    <div id="records-list"></div>
 </div>
 
-<script type="module">
-    // 1. Firebase 연동 설정 (본인의 Firebase 프로젝트 설정 값으로 변경하세요)
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } 
-        from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } 
-        from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+<script>
+    // 1. 페이지 로드 시 기존 기록 불러오기
+    document.addEventListener('DOMContentLoaded', loadRecords);
 
-    const firebaseConfig = {
-        apiKey: "YOUR_FIREBASE_API_KEY",
-        authDomain: "YOUR_PROJECT.firebaseapp.com",
-        projectId: "YOUR_PROJECT_ID",
-        storageBucket: "YOUR_PROJECT.appspot.com",
-        messagingSenderId: "YOUR_SENDER_ID",
-        appId: "YOUR_APP_ID"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-
-    // UI 요소
-    const authSection = document.getElementById('auth-section');
-    const appSection = document.getElementById('app-section');
-    const recordsList = document.getElementById('records-list');
-
-    // 2. 로그인 및 회원가입 (Firebase Auth)
-    document.getElementById('signup-btn').addEventListener('click', () => {
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-        createUserWithEmailAndPassword(auth, email, password)
-            .then(() => alert("회원가입 성공!"))
-            .catch(error => alert("오류: " + error.message));
-    });
-
-    document.getElementById('login-btn').addEventListener('click', () => {
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-        signInWithEmailAndPassword(auth, email, password)
-            .catch(error => alert("로그인 실패: " + error.message));
-    });
-
-    document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
-
-    onAuthStateChanged(auth, user => {
-        if (user) {
-            authSection.style.display = 'none';
-            appSection.style.display = 'block';
-            loadRecords(); // 로그인 시 데이터 불러오기
-        } else {
-            authSection.style.display = 'block';
-            appSection.style.display = 'none';
-        }
-    });
-
-    // 3. 간호 기록 저장 (Firestore)
-    document.getElementById('save-btn').addEventListener('click', async () => {
+    // 2. 기록 저장 (localStorage 사용)
+    function saveRecord() {
         const name = document.getElementById('patient-name').value;
-        const vit
+        const vitals = document.getElementById('vitals').value;
+        const notes = document.getElementById('nursing-notes').value;
+
+        if (!name || !notes) {
+            alert("환자명과 간호 기록은 필수 입력 사항입니다.");
+            return;
+        }
+
+        const record = {
+            id: Date.now(),
+            name: name,
+            vitals: vitals,
+            notes: notes,
+            timestamp: new Date().toLocaleString()
+        };
+
+        let records = JSON.parse(localStorage.getItem('nursing_records')) || [];
+        records.unshift(record); // 최신 기록을 맨 앞에 추가
+        localStorage.setItem('nursing_records', JSON.stringify(records));
+
+        // 입력창 초기화 및 목록 갱신
+        document.getElementById('patient-name').value = '';
+        document.getElementById('vitals').value = '';
+        document.getElementById('nursing-notes').value = '';
+        loadRecords();
+    }
+
+    // 3. 기록 목록 화면에 표시
+    function loadRecords() {
+        const recordsList = document.getElementById('records-list');
+        const records = JSON.parse(localStorage.getItem('n
