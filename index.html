@@ -497,14 +497,496 @@
 
     // 1. 엔드포인트 및 API 환경 설정 정보
     const firebaseConfig = {
-  apiKey: "bMmmKukpgvR24DuRTcT6
-",
-  authDomain: "test-7a034.firebaseapp.com",
-  databaseURL: "https://test-7a034-default-rtdb.firebaseio.com",
-  projectId: "test-7a034",
-  storageBucket: "test-7a034.firebasestorage.app",
-  messagingSenderId: "997602551692",
-  appId: "1:997602551692:web:e1e392bbf6202128a218a9",
-  measurementId: "G-WPNDQSQEMP"
-};
-      auth
+      apiKey: 'AIzaSyDO-v52Ehwphh5gW0WBzu9_DliMhOzy4Yo',
+      authDomain: 'kang-f4e85.firebaseapp.com',
+      databaseURL: 'https://kang-f4e85-default-rtdb.firebaseio.com',
+      projectId: 'kang-f4e85',
+      storageBucket: 'kang-f4e85.firebasestorage.app',
+      messagingSenderId: '107057126084',
+      appId: '1:107057126084:web:30f7bcb3f25dd2aa4a0791',
+      measurementId: 'G-DJ52YTYQZM'
+    };
+
+    const CHATGPT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyTS-n6dNxhXGHxck-BL97z9l2PPrqZbl0tqjtPIP44MVFtyOiTwizk4jva8GMuV38p/exec';
+    const TTS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxDNMIktE288seW2Mr5YgksYFeAP3SNl8YyQZFa1DuvD0N_8pjRLDmxkZBYyQ4WGPmt/exec';
+
+    // 앱 초기화
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const database = getDatabase(app);
+
+    // 2. DOM 요소 바인딩
+    const authSection = document.getElementById('authSection');
+    const mainSection = document.getElementById('mainSection');
+    const emailInput = document.getElementById('emailInput');
+    const passwordInput = document.getElementById('passwordInput');
+    const loginBtn = document.getElementById('loginBtn');
+    const signupBtn = document.getElementById('signupBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const userEmail = document.getElementById('userEmail');
+
+    // 간호 기록 DOM
+    const titleInput = document.getElementById('titleInput');
+    const contentInput = document.getElementById('contentInput');
+    const addBtn = document.getElementById('addBtn');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const dataList = document.getElementById('dataList');
+    const statusBox = document.getElementById('status');
+
+    // ChatGPT DOM
+    const questionInput = document.getElementById('questionInput');
+    const answerBox = document.getElementById('answerBox');
+    const aiStatus = document.getElementById('aiStatus');
+    const askBtn = document.getElementById('askBtn');
+    const clearAiBtn = document.getElementById('clearAiBtn');
+    const bridgeRow = document.getElementById('bridgeRow');
+    const bridgeBtn = document.getElementById('bridgeBtn');
+
+    // TTS DOM
+    const textInput = document.getElementById('textInput');
+    const modelSelect = document.getElementById('modelSelect');
+    const voiceSelect = document.getElementById('voiceSelect');
+    const speedInput = document.getElementById('speedInput');
+    const makeBtn = document.getElementById('makeBtn');
+    const clearTtsBtn = document.getElementById('clearTtsBtn');
+    const ttsStatus = document.getElementById('ttsStatus');
+    const resultBox = document.getElementById('resultBox');
+    const audioPlayer = document.getElementById('audioPlayer');
+    const downloadLink = document.getElementById('downloadLink');
+
+    let currentUser = null;
+    let currentItemsRef = null;
+
+    // 3. 대시보드 탭 전환 로직
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        tabButtons.forEach(b => b.classList.remove('active'));
+        tabContents.forEach(c => c.classList.add('hidden'));
+
+        btn.classList.add('active');
+        const tabId = btn.getAttribute('data-tab');
+        document.getElementById(tabId).classList.remove('hidden');
+      });
+    });
+
+    // 4. 인증(Authentication) 핸들러
+    function getEmailAndPassword() {
+      const email = emailInput.value.trim();
+      const password = passwordInput.value.trim();
+      if (!email || !password) {
+        alert('보안 계정 이메일과 비밀번호를 모두 입력해 주세요.');
+        return null;
+      }
+      if (password.length < 6) {
+        alert('의료정보 보안을 위해 비밀번호는 6자리 이상이어야 합니다.');
+        return null;
+      }
+      return { email, password };
+    }
+
+    signupBtn.addEventListener('click', async () => {
+      const account = getEmailAndPassword();
+      if (!account) return;
+      try {
+        await createUserWithEmailAndPassword(auth, account.email, account.password);
+        alert('신규 의료진 등록 승인이 성공적으로 완료되었습니다.');
+      } catch (error) {
+        alert(getKoreanErrorMessage(error.code));
+      }
+    });
+
+    loginBtn.addEventListener('click', async () => {
+      const account = getEmailAndPassword();
+      if (!account) return;
+      try {
+        await signInWithEmailAndPassword(auth, account.email, account.password);
+      } catch (error) {
+        alert(getKoreanErrorMessage(error.code));
+      }
+    });
+
+    logoutBtn.addEventListener('click', async () => {
+      try {
+        await signOut(auth);
+      } catch (error) {
+        alert('로그아웃 도중 오류가 발생했습니다.');
+      }
+    });
+
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        currentUser = user;
+        showMainPage(user);
+        startRealtimeDataListener(user.uid);
+      } else {
+        currentUser = null;
+        showAuthPage();
+        stopRealtimeDataListener();
+      }
+    });
+
+    function showMainPage(user) {
+      authSection.classList.add('hidden');
+      mainSection.classList.remove('hidden');
+      userEmail.textContent = user.email;
+      emailInput.value = '';
+      passwordInput.value = '';
+    }
+
+    function showAuthPage() {
+      authSection.classList.remove('hidden');
+      mainSection.classList.add('hidden');
+      userEmail.textContent = '';
+      dataList.innerHTML = '';
+      clearAiPage();
+      clearTtsPage();
+    }
+
+    // 5. 실시간 간호기록 데이터베이스 로직 (Firebase CRUD)
+    function setStatus(message) {
+      statusBox.textContent = message;
+    }
+
+    function startRealtimeDataListener(uid) {
+      stopRealtimeDataListener();
+      setStatus('실시간 병동 클라우드 데이터를 동기화하는 중...');
+      currentItemsRef = ref(database, `users/${uid}/items`);
+
+      onValue(currentItemsRef, (snapshot) => {
+        const data = snapshot.val();
+        renderData(data);
+        setStatus('병동 데이터 실시간 동기화 완료');
+      }, (error) => {
+        console.error(error);
+        setStatus('데이터 연동 실패: 보안 규칙 설정을 재확인하십시오.');
+      });
+    }
+
+    function stopRealtimeDataListener() {
+      if (currentItemsRef) {
+        off(currentItemsRef);
+        currentItemsRef = null;
+      }
+    }
+
+    window.triggerRefresh = () => {
+      if (currentUser) startRealtimeDataListener(currentUser.uid);
+    };
+
+    addBtn.addEventListener('click', addData);
+    refreshBtn.addEventListener('click', window.triggerRefresh);
+
+    async function addData() {
+      if (!currentUser) return;
+      const title = titleInput.value.trim();
+      const content = contentInput.value.trim();
+
+      if (!title || !content) {
+        alert('환자명(병실)과 처치 기록을 모두 입력해 주세요.');
+        return;
+      }
+
+      try {
+        const itemsRef = ref(database, `users/${currentUser.uid}/items`);
+        const newItemRef = push(itemsRef);
+
+        await set(newItemRef, {
+          title,
+          content,
+          createdAt: new Date().toLocaleString('ko-KR'),
+          updatedAt: ''
+        });
+
+        titleInput.value = '';
+        contentInput.value = '';
+      } catch (error) {
+        console.error(error);
+        alert('기록 세이브에 실패했습니다.');
+      }
+    }
+
+    window.deleteData = async function(id) {
+      if (!currentUser) return;
+      const isConfirmed = confirm('이 간호 처치 기록을 영구 삭제하시겠습니까?');
+      if (!isConfirmed) return;
+
+      try {
+        await remove(ref(database, `users/${currentUser.uid}/items/${id}`));
+      } catch (error) {
+        console.error(error);
+        alert('기록 삭제에 실패했습니다.');
+      }
+    };
+
+    window.updateData = async function(id) {
+      if (!currentUser) return;
+      const editTitle = document.getElementById(`edit-title-${id}`).value.trim();
+      const editContent = document.getElementById(`edit-content-${id}`).value.trim();
+
+      if (!editTitle || !editContent) {
+        alert('수정 데이터를 완벽하게 입력해 주세요.');
+        return;
+      }
+
+      try {
+        await update(ref(database, `users/${currentUser.uid}/items/${id}`), {
+          title: editTitle,
+          content: editContent,
+          updatedAt: new Date().toLocaleString('ko-KR')
+        });
+      } catch (error) {
+        console.error(error);
+        alert('기록 업데이트 실패');
+      }
+    };
+
+    function renderData(data) {
+      dataList.innerHTML = '';
+      if (!data) {
+        dataList.innerHTML = '<div class="empty">현재 보관된 간호 인수인계 및 데이터가 없습니다.</div>';
+        return;
+      }
+
+      const entries = Object.entries(data).reverse();
+      entries.forEach(([id, item]) => {
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.id = `item-${id}`;
+
+        div.innerHTML = `
+          <div>
+            <p class="item-title">${escapeHTML(item.title || '')}</p>
+            <p class="item-content">${escapeHTML(item.content || '')}</p>
+            <div class="item-date">
+              최초 등록: ${item.createdAt || '-'}
+              ${item.updatedAt ? ` / 최종 수정: ${item.updatedAt}` : ''}
+            </div>
+          </div>
+          <div class="item-actions">
+            <button class="edit-btn" onclick="showEditForm('${id}', '${escapeForAttribute(item.title || '')}', '${escapeForAttribute(item.content || '')}')">수정</button>
+            <button class="delete-btn" onclick="deleteData('${id}')">삭제</button>
+          </div>
+        `;
+        dataList.appendChild(div);
+      });
+    }
+
+    window.showEditForm = function(id, title, content) {
+      const itemBox = document.getElementById(`item-${id}`);
+      itemBox.innerHTML = `
+        <div class="edit-box">
+          <input id="edit-title-${id}" type="text" value="${title}" />
+          <input id="edit-content-${id}" type="text" value="${content}" />
+          <button class="save-btn" onclick="updateData('${id}')">완료</button>
+          <button class="cancel-btn" onclick="triggerRefresh()">취소</button>
+        </div>
+      `;
+    };
+
+    // 6. ChatGPT 임상/업무 어시스턴트 기능
+    askBtn.addEventListener('click', askChatGPT);
+    clearAiBtn.addEventListener('click', clearAiPage);
+
+    async function askChatGPT() {
+      const question = questionInput.value.trim();
+      if (!question) {
+        alert('AI에게 요청할 지시사항이나 질문을 기록하세요.');
+        return;
+      }
+
+      try {
+        setAiLoading(true);
+        answerBox.textContent = '인공지능이 의료 가이드라인 및 업무 답변을 구성 중입니다...';
+        aiStatus.textContent = '보안 프록시 게이트웨이(GAS) 연결 중...';
+        bridgeRow.classList.add('hidden');
+
+        const response = await fetch(CHATGPT_SCRIPT_URL, {
+          method: 'POST',
+          body: JSON.stringify({ question: question })
+        });
+
+        const data = await response.json();
+        if (data.error) throw new Error(data.error);
+
+        answerBox.textContent = data.answer || '응답 프로토콜 로드 실패';
+        aiStatus.textContent = '임상 분석 답변 로드 완료';
+        bridgeRow.classList.remove('hidden'); // 연동 버튼 노출
+      } catch (error) {
+        console.error(error);
+        answerBox.textContent = '서버 통신 중 장애가 식별되었습니다.\n\n' + error.message;
+        aiStatus.textContent = '분석 요청 실패';
+      } finally {
+        setAiLoading(false);
+      }
+    }
+
+    function setAiLoading(isLoading) {
+      askBtn.disabled = isLoading;
+      askBtn.textContent = isLoading ? '임상 처리중..' : 'AI 분석 요청';
+    }
+
+    function clearAiPage() {
+      questionInput.value = '';
+      answerBox.textContent = '아직 분석 요청된 내용이 없습니다.';
+      aiStatus.textContent = '';
+      bridgeRow.classList.add('hidden');
+    }
+
+    // ⚡ 고급 유기적 연동 기능 구현 (AI 답변 -> TTS 자동 바인딩 및 화면 이동)
+    bridgeBtn.addEventListener('click', () => {
+      const answerText = answerBox.textContent;
+      if (!answerText || answerText === '아직 분석 요청된 내용이 없습니다.') return;
+
+      // 1. 데이터 전달
+      textInput.value = `[AI 어시스턴트 임상 처치 브리핑입니다] \n\n${answerText}`;
+      
+      // 2. TTS 탭 활성화 액션
+      tabButtons.forEach(b => b.classList.remove('active'));
+      tabContents.forEach(c => c.classList.add('hidden'));
+      
+      const ttsTabTargetBtn = document.querySelector('[data-tab="ttsTab"]');
+      if (ttsTabTargetBtn) ttsTabTargetBtn.classList.add('active');
+      document.getElementById('ttsTab').classList.remove('hidden');
+
+      ttsStatus.textContent = 'AI 데이터 원고 이관 완료. 오디오 생성을 진행하세요.';
+    });
+
+    // 7. OpenAI 기반 오디오 브리핑(TTS) 엔진 핸들러
+    makeBtn.addEventListener('click', makeSpeech);
+    clearTtsBtn.addEventListener('click', clearTtsPage);
+
+    async function makeSpeech() {
+      const text = textInput.value.trim();
+      const model = modelSelect.value;
+      const voice = voiceSelect.value;
+      const speed = Number(speedInput.value || 1.0);
+
+      if (!text) {
+        alert('음성 브리핑으로 변환할 데이터 원고 텍스트를 구성해주세요.');
+        return;
+      }
+
+      if (speed < 0.25 || speed > 4.0) {
+        alert('유효 청취 스피드 범주는 0.25배속에서 4.0배속 사이입니다.');
+        return;
+      }
+
+      try {
+        setTtsLoading(true);
+        resultBox.classList.add('hidden');
+        ttsStatus.textContent = '원고 인코딩 및 고품질 스트리밍 음성 생성 중...';
+
+        const response = await fetch(TTS_SCRIPT_URL, {
+          method: 'POST',
+          body: JSON.stringify({
+            type: 'tts',
+            text: text,
+            model: model,
+            voice: voice,
+            speed: speed
+          })
+        });
+
+        const data = await response.json();
+        if (data.error) throw new Error(data.error);
+        if (!data.audioBase64) throw new Error('음성 바이너리 데이터를 취득하지 못했습니다.');
+
+        const audioUrl = base64ToAudioUrl(data.audioBase64, 'audio/mpeg');
+        audioPlayer.src = audioUrl;
+        downloadLink.href = audioUrl;
+        downloadLink.download = makeFileName();
+        resultBox.classList.remove('hidden');
+        ttsStatus.textContent = '업무 오디오 브리핑 파일 생성 완료';
+      } catch (error) {
+        console.error(error);
+        ttsStatus.textContent = 'TTS 엔진 처리 오류';
+        alert('오류 메시지:\n\n' + error.message);
+      } finally {
+        setTtsLoading(false);
+      }
+    }
+
+    function base64ToAudioUrl(base64, mimeType) {
+      const byteCharacters = atob(base64);
+      const byteArrays = [];
+      for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+        const slice = byteCharacters.slice(offset, offset + 512);
+        const byteNumbers = new Array(slice.length);
+        for (let i = 0; i < slice.length; i++) {
+          byteNumbers[i] = slice.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        byteArrays.push(byteArray);
+      }
+      const blob = new Blob(byteArrays, { type: mimeType });
+      return URL.createObjectURL(blob);
+    }
+
+    function makeFileName() {
+      const now = new Date();
+      return `NurseBriefing-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}.mp3`;
+    }
+
+    function setTtsLoading(isLoading) {
+      makeBtn.disabled = isLoading;
+      makeBtn.textContent = isLoading ? '변환 중...' : '오디오 브리핑 생성';
+    }
+
+    function clearTtsPage() {
+      textInput.value = '';
+      ttsStatus.textContent = '';
+      audioPlayer.removeAttribute('src');
+      downloadLink.href = '#';
+      resultBox.classList.add('hidden');
+    }
+
+    // 8. 공통 유틸리티 헬퍼 (XSS 및 데이터 바인딩 에러 방지)
+    function escapeHTML(text) {
+      return String(text)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function escapeForAttribute(text) {
+      return escapeHTML(text).replaceAll('`', '&#096;');
+    }
+
+    function getKoreanErrorMessage(code) {
+      switch (code) {
+        case 'auth/email-already-in-use': return '이미 의료진 시스템에 등록된 이메일 계정입니다.';
+        case 'auth/invalid-email': return '이메일 계정 식별자 규격이 부적합합니다.';
+        case 'auth/weak-password': return '보안 수준이 너무 낮습니다. 비밀번호를 더 길게 구성하세요.';
+        case 'auth/user-not-found': return '등록된 의료진 정보가 식별되지 않습니다.';
+        case 'auth/wrong-password': return '인증 비밀번호가 누락되었거나 일치하지 않습니다.';
+        case 'auth/invalid-credential': return '이메일 또는 비밀번호가 유효하지 않습니다.';
+        case 'auth/network-request-failed': return '병원 네트워크 노드 혹은 외부 클라우드 통신망 연결이 원활하지 않습니다.';
+        default: return `시스템 식별 에러코드: ${code}`;
+      }
+    }
+
+    // 9. 글로벌 이벤트 리스너 (엔터/단축키 매핑)
+    document.addEventListener('keydown', function(event) {
+      const activeId = document.activeElement.id;
+
+      if (event.key === 'Enter') {
+        if (activeId === 'emailInput' || activeId === 'passwordInput') {
+          loginBtn.click();
+        }
+        if (activeId === 'titleInput' || activeId === 'contentInput') {
+          addBtn.click();
+        }
+        if ((activeId === 'questionInput' || activeId === 'textInput') && event.ctrlKey) {
+          if (activeId === 'questionInput') askBtn.click();
+          if (activeId === 'textInput') makeBtn.click();
+        }
+      }
+    });
+  </script>
+</body>
+</html>
